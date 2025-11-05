@@ -8,26 +8,40 @@
 ## 1. Systemic Risk Framing
 
 ### 1.1 Overview of Systemic Risks under the DSA
-- Definition of systemic risks according to the EU Digital Services Act (Article 27).
-- Key risk areas:
-    - Threats to democratic processes
-    - Violations of fundamental rights
-    - Risks to information integrity
-    - Risks to public security
+Under the Digital Services Act (DSA), systemic risks are large-scale or society-wide harms that can result from how very large online platforms (VLOPs) operate. 
+These include risks to:
+- the dissemination of illegal content
+- negative effects on fundamental rights (such as freedom of expression, privacy, and non-discrimination)
+- civic discourse 
+- information integrity 
+- democratic processes 
+- public security 
+- the protection of minors
 
 ### 1.2 Recommender Systems and Systemic Risks
-- How recommender systems influence information flows and social dynamics.
-- Common mechanisms of systemic risk:
-    - Amplification of harmful or misleading content
-    - Polarization and echo chambers
-    - Manipulation of civic discourse
-    - Bias and discrimination through ranking models
 
-### 1.3 Framing for This Audit
-- How this framing guides your audit of X’s recommender system.
-- Specific focus on engagement-based ranking and Grok integration.
+Recommender systems determine what content users see, when they see it, and how often. At scale, these algorithmic choices can shape attention, opinions, and social dynamics, introducing systemic risks that affect society as a whole.
 
----
+Following are some design choices and how they contribute to systemic risks.
+
+#### Engagement-based optimization
+When algorithms prioritize metrics like likes, replies, and watch time, they may unintentionally amplify sensational, divisive, or harmful content that triggers strong reactions.
+
+#### Signal selection and weighting
+Overemphasizing positive engagement while underweighting negative feedback (e.g., blocks, mutes, reports) can sustain exposure to problematic or misleading material.
+
+#### Personalization and social-graph bias
+By tailoring recommendations to user preferences and social connections, recommenders can create echo chambers, reducing exposure to diverse viewpoints and enabling manipulation of civic discourse.
+
+#### Virality and trending mechanisms
+Features that promote rapid resharing can accelerate the spread of misinformation or coordinated manipulation campaigns, especially during elections or crises.
+
+#### Weak demotion of borderline content
+Content that skirts policy boundaries may still perform well if downranking systems are weak, amplifying harmful or low-quality material.
+
+#### User control and transparency
+Limited options for non-personalized feeds and opaque ranking explanations reduce user agency and accountability.
+
 
 ## 2. Audit of Engagement-Based Ranking (RQ1)
 
