@@ -214,62 +214,112 @@ Especially line 45 (candidateSourceDiversityRescorer)
 
 This is an exponential decay multiplier with a minimum of floor. For index = 0 the multiplier is 1.0, meaning that there is no penalty for the first element, later items are downweighted.
 
-
-
+---
 
 ## 3. Audit of Grok Integration (RQ2)
 
-### 3.1 Grok’s Role in the Recommendation Pipeline
-- Evidence of Grok’s integration (code files, documentation).
-- Its placement (e.g., reranking, classification, summarization).
+Based on the audit of X’s open-source code and documentation, here are the answers to the RQ2 subquestions regarding Grok's integration.
 
-### 3.2 Inputs, Outputs, and Functions
-- Data or content Grok processes.
-- Interaction with other components of the recommender system.
 
-### 3.3 Potential Implications for Systemic Risks
-- Possible effects on information integrity, fairness, or transparency.
-- Risks from generative or personalized outputs.
+### Where Grok appears to fit in the recommendation pipeline
+
+Grok is integrated into multiple layers of X’s For You recommendation system. Specifically:
+
+1. Content Classification & Annotation:
+  * Grok generates semantic labels for each tweet, including topics, tags, and moderation flags (e.g., `isSpam`, `isNSFW`, `isViolent`(See line 85 - 91).
+  * Integrated via [GrokAnnotationsFeatureHydrator.scala](../home-mixer/server/src/main/scala/com/twitter/home_mixer/functional_component/feature_hydrator/GrokAnnotationsFeatureHydrator.scala).
+
+2. Filtering & Moderation:
+  * Grok’s annotations are used in dedicated filters (
+[GrokGoreFilter.scala](../home-mixer/server/src/main/scala/com/twitter/home_mixer/functional_component/filter/GrokGoreFilter.scala)
+[GrokNsfwFilter.scala](../home-mixer/server/src/main/scala/com/twitter/home_mixer/functional_component/filter/GrokNsfwFilter.scala)
+[GrokSpamFilter.scala](../home-mixer/server/src/main/scala/com/twitter/home_mixer/functional_component/filter/GrokSpamFilter.scala)
+[GrokViolentFilter.scala](../home-mixer/server/src/main/scala/com/twitter/home_mixer/functional_component/filter/GrokViolentFilter.scala)
+[HasAuthorFilter.scala](../home-mixer/server/src/main/scala/com/twitter/home_mixer/functional_component/filter/HasAuthorFilter.scala)
+,etc.) to exclude tweets from the recommendation candidate pool based.
+
+3. Candidate Sourcing:
+  * Tweets are retrieved from Grok-powered topic sources via [PopGrokTopicTweetsCandidateSource.scala](../tweet-mixer/server/src/main/scala/com/twitter/tweet_mixer/candidate_source/popular_grok_topic_tweets/PopGrokTopicTweetsCandidateSource.scala), supplying trending tweets in Grok-classified categories (e.g., Sports, Anime).
+4. Scoring & Ranking:
+  * Grok’s annotations influence ranking indirectly via the [GrokSlopScoreRescorer.scala](../home-mixer/server/src/main/scala/com/twitter/home_mixer/product/scored_tweets/scorer/GrokSlopScoreRescorer.scala), which penalizes low-quality or “slop” content.
+
+
+### What inputs/outputs or processing steps are visible
+
+Inputs:
+* Tweet Text: Grok processes the textual content of each tweet [GrokAnnotationsFeatureHydrator.scala](../home-mixer/server/src/main/scala/com/twitter/home_mixer/functional_component/feature_hydrator/GrokAnnotationsFeatureHydrator.scala).
+* User Language/Location: For topic-specific recommendations [UserEngagedLanguagesFeatureHydrator.scala](../home-mixer/server/src/main/scala/com/twitter/home_mixer/functional_component/feature_hydrator/UserEngagedLanguagesFeatureHydrator.scala).
+* User Engagement History: To determine preferred Grok topics or tags (via [UserEngagedGrokCategoriesFeatureHydrator.scala](../home-mixer/server/src/main/scala/com/twitter/home_mixer/functional_component/feature_hydrator/UserEngagedGrokCategoriesFeatureHydrator.scala)).
+
+Outputs:
+* GrokAnnotationsFeature:
+  * `topics`: high-level semantic topics (e.g., Tech, Sports).
+  * `tags`: granular content labels.
+  * `metadata`: booleans for moderation (e.g., `isSpam`, `isGore`, `isViolent`)
+  * Again here [GrokAnnotationsFeatureHydrator.scala](../home-mixer/server/src/main/scala/com/twitter/home_mixer/functional_component/feature_hydrator/GrokAnnotationsFeatureHydrator.scala).
+* Candidate Scores/Filters:
+  * Filters use annotations to drop undesired tweets.
+  * again here:
+    * [GrokGoreFilter.scala](../home-mixer/server/src/main/scala/com/twitter/home_mixer/functional_component/filter/GrokGoreFilter.scala)
+    * [GrokNsfwFilter.scala](../home-mixer/server/src/main/scala/com/twitter/home_mixer/functional_component/filter/GrokNsfwFilter.scala)
+    * [GrokSpamFilter.scala](../home-mixer/server/src/main/scala/com/twitter/home_mixer/functional_component/filter/GrokSpamFilter.scala)
+    * [GrokViolentFilter.scala](../home-mixer/server/src/main/scala/com/twitter/home_mixer/functional_component/filter/GrokViolentFilter.scala)
+    * [HasAuthorFilter.scala](../home-mixer/server/src/main/scala/com/twitter/home_mixer/functional_component/filter/HasAuthorFilter.scala)
+    * etc.
+  
+  * Scoring components adjust tweet ranking based on Grok-derived quality judgments
+    * [GrokSlopScoreRescorer.scala](../home-mixer/server/src/main/scala/com/twitter/home_mixer/product/scored_tweets/scorer/GrokSlopScoreRescorer.scala).
+
+Processing Steps:
+1. Tweet and user data hydrated via Grok feature hydrators.
+2. Filter phase drops tweets based on Grok’s moderation flags.
+3. Ranking phase adjusts scores with Grok-based rescorers.
+4. UI may display Grok-derived topics or translated versions of tweets.
+
+
+### Potential implications for systemic risks
+
+1. Opacity & Accountability:
+  * Grok introduces black-box decision-making, making it harder for users or auditors to understand why content is ranked or filtered.
+  * Algorithmic decisions are now influenced by LLM outputs that are not fully open or explainable.
+
+2. Over-Filtering & False Positives:
+  * Grok-based filters may remove legitimate content (e.g., satire, activism, or art) due to misclassification.
+  * Risk of shadowbanning or unintentional censorship.
+
+3. Manipulation Potential:
+  * Malicious actors might learn to game Grok’s content preferences (e.g., phrasing, topic hijacking) to push certain narratives or evade moderation.
+
+4. Suppression of Counter-Speech:
+  * Heavy penalization of “negative” or argumentative replies (e.g., via [GrokSlopScoreRescorer.scala](../home-mixer/server/src/main/scala/com/twitter/home_mixer/product/scored_tweets/scorer/GrokSlopScoreRescorer.scala)) may unintentionally suppress responses to misinformation or abuse, letting harmful content spread unchecked.
+
+
+
+
+## 4. Discussion and Risk Interpretation
+
+### 4.1 Summary of Key Findings
+
+- RQ1: Engagement-Based Ranking
+  - X’s recommender system places strong weight on engagement signals such as replies (13.5), author replies (75.0), and profile clicks (12.0), as shown in `ScoredTweetsParam.scala`.
+  - These signals are processed via a multi-step pipeline: UUA logging → USS aggregation → Engagement features → Heavy Ranker scoring.
+  - Negative feedback signals (e.g., blocks, reports) are heavily penalized but are reactive rather than preventative.
+  - The ranking logic tends to favor content that drives interaction, which can unintentionally amplify polarizing or divisive tweets.
+
+- RQ2: Grok Integration
+  - Grok is integrated into the pipeline for topic classification, safety filtering, candidate sourcing, and rescoring.
+  - Key components: `GrokAnnotationsFeatureHydrator`, `GrokSpamFilter`, `GrokSlopScoreRescorer`, and `PopGrokTopicTweetsCandidateSource`.
+  - Grok’s outputs (topics, tags, content flags) influence both what tweets are seen and how they are ranked.
+  - Its black-box nature raises accountability concerns, especially when tweets are downranked or suppressed without clear user feedback.
 
 ---
 
-## 4. Evidence and Traceability
+### 4.2 Limitations and Open Questions
 
-### 4.1 Code-Level Evidence
-| Finding | File Path | Class/Function | Line Numbers | Supported / Inferred |  
-|----------|------------|----------------|---------------|----------------------|  
-| Example: Dwell time weighting | `/server/src/main/scala/.../EngagementRanker.scala` | `EngagementRanker` | 220–245 | Supported |  
-
-### 4.2 Documentation and External Sources
-- Source links (blog posts, GitHub repos, technical explanations).
-- Explanatory notes for each finding.
+- **Code Transparency Gaps**
+  - While much of the recommender pipeline is open-source, Grok’s underlying model weights, training data, and classification logic are not.
 
 ---
 
-## 5. Discussion and Risk Interpretation
 
-### 5.1 Summary of Key Findings
-- Recap of findings from both RQ1 and RQ2.
 
-### 5.2 Systemic Risk Implications under the DSA
-- Which risk categories are most relevant (democratic processes, information integrity, etc.).
-
-### 5.3 Limitations and Open Questions
-- Gaps in public transparency or code accessibility.
-- Potential next steps or further audit needs.
-
----
-
-## 6. References
-- EU DSA Article 27
-- X Open Source Repository: [https://github.com/twitter/the-algorithm](https://github.com/twitter/the-algorithm)
-- X Engineering Blog: [https://blog.x.com/engineering/...](https://blog.x.com/engineering/...)
-- Example Audit (ACM Paper): [https://dl.acm.org/doi/pdf/10.1145/3442188.3445928](https://dl.acm.org/doi/pdf/10.1145/3442188.3445928)
-- Additional cited materials
-
----
-
-## Appendix (Optional)
-- Extended code listings
-- Screenshots or diagrams of data flow
-- Supporting excerpts from external documentation  
